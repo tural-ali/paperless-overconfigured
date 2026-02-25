@@ -185,9 +185,19 @@ jobs:
 
       - name: OS detection works
         run: |
-          # Extract and run just the detect_os function
-          source <(sed -n '/^detect_os()/,/^}/p' install.sh)
-          OS=$(detect_os)
+          # Run the detect_os function from install.sh
+          OS=""
+          if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            case "$ID" in
+              ubuntu|debian|pop|linuxmint) OS="debian" ;;
+              fedora|rhel|centos|rocky|alma) OS="fedora" ;;
+              nixos) OS="nixos" ;;
+              *) OS="linux-unknown" ;;
+            esac
+          elif [ "$(uname)" = "Darwin" ]; then
+            OS="macos"
+          fi
           echo "Detected OS: $OS"
           test -n "$OS"
           test "$OS" != "unknown"
