@@ -248,6 +248,37 @@ du -sh ~/paperless/media/
 df -h /
 ```
 
+## Acknowledgments
+
+This project is built on top of amazing open-source software. Huge thanks to:
+
+- [**Paperless-NGX**](https://github.com/paperless-ngx/paperless-ngx) — The core document management system that makes this all possible
+- [**paperless-gpt**](https://github.com/icereed/paperless-gpt) by [@icereed](https://github.com/icereed) — AI-powered document classification and OCR integration
+- [**Gotenberg**](https://github.com/gotenberg/gotenberg) — Document conversion API
+- [**Apache Tika**](https://github.com/apache/tika) — Content analysis and text extraction
+- [**PostgreSQL**](https://www.postgresql.org/) — The database engine
+- [**Redis**](https://github.com/redis/redis) — Cache and task queue
+- [**Cloudflare Tunnel**](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — Secure tunneling without open ports
+- [**Tailscale**](https://tailscale.com/) — Private mesh networking
+- [**Ollama**](https://github.com/ollama/ollama) — Local LLM inference
+- [**rclone**](https://github.com/rclone/rclone) — Cloud storage sync for backups
+- [**Docker**](https://www.docker.com/) — Containerization
+
+## Disclaimer
+
+This project is **not affiliated with, endorsed by, or sponsored by** any of the projects listed above, including Paperless-NGX, Cloudflare, Tailscale, Google, OpenAI, or any other mentioned service or software.
+
+This repository is created and maintained as a **personal hobby project**. It is provided as-is, with no warranties or guarantees of any kind.
+
+**You are solely responsible for:**
+- Your data, documents, and backups
+- The security of your installation and credentials
+- Any data loss, leakage, or corruption that may occur
+- Compliance with applicable laws and regulations (including GDPR, data residency, etc.)
+- Reviewing and understanding the configuration before deploying to production
+
+Always keep independent backups of your important documents. Test your backup and restore procedures regularly.
+
 ## License
 
 MIT
