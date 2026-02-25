@@ -146,7 +146,7 @@ read -r
 # PHASE 2: INTERACTIVE WIZARD
 # ══════════════════════════════════════════════════════════════
 
-step "[1/8] Installation Directory"
+step "[1/9] Installation Directory"
 echo -e "${DIM}Where should Paperless be installed?${NC}"
 if [ "$OS" = "macos" ]; then
     DEFAULT_DIR="$HOME/paperless"
@@ -166,7 +166,7 @@ if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
 fi
 
 # ──────────────────────────────────────────────────────────────
-step "[2/8] Admin Credentials"
+step "[2/9] Admin Credentials"
 echo -e "${DIM}Create your Paperless admin account.${NC}"
 ask ADMIN_USER "Username" "admin"
 while true; do
@@ -179,7 +179,7 @@ while true; do
 done
 
 # ──────────────────────────────────────────────────────────────
-step "[3/8] Remote Access"
+step "[3/9] Remote Access"
 echo -e "${DIM}How will you access Paperless from outside this machine?${NC}"
 echo ""
 echo -e "  ${CYAN}1)${NC} ${GREEN}Tailscale (recommended)${NC}"
@@ -266,7 +266,7 @@ case "$ACCESS_CHOICE" in
 esac
 
 # ──────────────────────────────────────────────────────────────
-step "[4/8] AI-Powered Document Classification"
+step "[4/9] AI-Powered Document Classification"
 echo -e "${DIM}paperless-gpt automatically classifies, tags, and titles your documents.${NC}"
 echo -e "${DIM}It requires an LLM provider. You can skip this and add it later.${NC}"
 echo ""
@@ -348,7 +348,40 @@ case "$AI_CHOICE" in
 esac
 
 # ──────────────────────────────────────────────────────────────
-step "[5/8] OCR Languages"
+step "[5/9] Document Graph (Neo4j)"
+echo -e "${DIM}Neo4j enables relationship-based queries across your documents.${NC}"
+echo -e "${DIM}Example: \"show everything related to this tax return\"${NC}"
+echo ""
+echo -e "  ${CYAN}1)${NC} ${GREEN}Enable Neo4j graph database${NC}"
+echo -e "     ${DIM}Adds Neo4j Browser (port 7474) for visual graph queries.${NC}"
+echo -e "     ${DIM}Requires ~1 GB additional RAM.${NC}"
+echo ""
+echo -e "  ${CYAN}2)${NC} Skip"
+echo ""
+prompt "Enter choice [1-2]: "
+read -r GRAPH_CHOICE
+
+ENABLE_GRAPH="false"
+NEO4J_PASSWORD=""
+
+case "$GRAPH_CHOICE" in
+    1)
+        ENABLE_GRAPH="true"
+        NEO4J_PASSWORD=$(generate_password)
+        if [ -n "$COMPOSE_PROFILES" ]; then
+            COMPOSE_PROFILES="${COMPOSE_PROFILES},graph"
+        else
+            COMPOSE_PROFILES="graph"
+        fi
+        success "Neo4j graph database enabled"
+        ;;
+    *)
+        info "Skipping Neo4j. You can enable it later in .env"
+        ;;
+esac
+
+# ──────────────────────────────────────────────────────────────
+step "[6/9] OCR Languages"
 echo -e "${DIM}Which languages are your documents in?${NC}"
 echo ""
 echo -e "  ${CYAN}1)${NC} English only"
@@ -376,7 +409,7 @@ case "$OCR_CHOICE" in
 esac
 
 # ──────────────────────────────────────────────────────────────
-step "[6/8] Automated Backups"
+step "[7/9] Automated Backups"
 echo -e "${DIM}Paperless can automatically back up your documents on a schedule.${NC}"
 echo ""
 echo -e "  ${CYAN}1)${NC} ${GREEN}Google Drive (recommended)${NC}"
@@ -454,7 +487,7 @@ if [ "$ENABLE_BACKUPS" = "true" ]; then
 fi
 
 # ──────────────────────────────────────────────────────────────
-step "[7/8] Email Integration"
+step "[8/9] Email Integration"
 echo -e "${DIM}Paperless can automatically import documents from email attachments.${NC}"
 prompt "Set up email ingestion? (y/N): "
 read -r EMAIL_SETUP
@@ -476,7 +509,7 @@ if [[ "$EMAIL_SETUP" =~ ^[Yy] ]]; then
 fi
 
 # ──────────────────────────────────────────────────────────────
-step "[8/8] Timezone"
+step "[9/9] Timezone"
 DETECTED_TZ=$(cat /etc/timezone 2>/dev/null || readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||' || echo "UTC")
 ask TIMEZONE "Timezone" "$DETECTED_TZ"
 
@@ -654,6 +687,10 @@ step "Creating installation at $INSTALL_DIR..."
 
 mkdir -p "$INSTALL_DIR"/{data,media,export,consume,redis,db,prompts,scripts,backups}
 
+if [ "$ENABLE_GRAPH" = "true" ]; then
+    mkdir -p "$INSTALL_DIR"/neo4j/{data,logs}
+fi
+
 # ── Generate secrets ──────────────────────────────────────────
 SECRET_KEY=$(generate_secret)
 DB_PASSWORD=$(generate_password)
@@ -740,6 +777,10 @@ OCR_PROVIDER=$OCR_PROVIDER
 GOOGLE_PROJECT_ID=$GOOGLE_PROJECT_ID
 GOOGLE_LOCATION=$GOOGLE_LOCATION
 GOOGLE_PROCESSOR_ID=$GOOGLE_PROCESSOR_ID
+
+# ── Neo4j Graph ──
+ENABLE_GRAPH=$ENABLE_GRAPH
+NEO4J_PASSWORD=$NEO4J_PASSWORD
 
 # ── Database ──
 POSTGRES_DB=paperless
@@ -1143,6 +1184,35 @@ if [ "$ENABLE_BACKUPS" = "true" ]; then
 fi
 
 # ══════════════════════════════════════════════════════════════
+# PHASE 8b: NEO4J SYNC SETUP (if graph enabled)
+# ══════════════════════════════════════════════════════════════
+
+if [ "$ENABLE_GRAPH" = "true" ]; then
+    step "Setting up Neo4j graph sync..."
+
+    # Install Python dependencies for sync script
+    if command -v pip3 &>/dev/null; then
+        info "Installing Neo4j Python driver..."
+        pip3 install --quiet neo4j requests 2>/dev/null || {
+            warn "Could not install Python packages. Install manually: pip3 install neo4j requests"
+        }
+    else
+        warn "pip3 not found. Install manually: pip3 install neo4j requests"
+    fi
+
+    # Set up sync cron (every 15 minutes)
+    SYNC_CRON="*/15 * * * * cd $INSTALL_DIR && python3 scripts/neo4j-sync.py >> $INSTALL_DIR/neo4j-sync.log 2>&1"
+    if crontab -l 2>/dev/null | grep -qF "neo4j-sync.py"; then
+        success "Neo4j sync cron already exists"
+    else
+        (crontab -l 2>/dev/null; echo "$SYNC_CRON") | crontab -
+        success "Neo4j sync scheduled: every 15 minutes"
+    fi
+
+    echo -e "${DIM}  First sync will run after you add PAPERLESS_API_TOKEN to .env${NC}"
+fi
+
+# ══════════════════════════════════════════════════════════════
 # PHASE 9: START THE STACK
 # ══════════════════════════════════════════════════════════════
 
@@ -1214,6 +1284,10 @@ esac
 
 if [[ "$COMPOSE_PROFILES" == *"ai"* ]]; then
     echo "    paperless-gpt: http://localhost:8080"
+fi
+
+if [[ "$COMPOSE_PROFILES" == *"graph"* ]]; then
+    echo "    Neo4j Browser: http://localhost:7474"
 fi
 
 echo ""

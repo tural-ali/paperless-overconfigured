@@ -72,6 +72,8 @@ jobs:
             -e 's|${GDRIVE_REMOTE}||g' \
             -e 's|${GDRIVE_BACKUP_DIR}||g' \
             -e 's|${GITHUB_BACKUP_REPO}||g' \
+            -e 's|${ENABLE_GRAPH}|false|g' \
+            -e 's|${NEO4J_PASSWORD}|testneo4jpass123|g' \
             -e 's|${COMPOSE_PROFILES}||g' \
             -e 's|${PAPERLESS_EMAIL_HOST}||g' \
             -e 's|${PAPERLESS_EMAIL_PORT}||g' \
@@ -96,10 +98,15 @@ jobs:
           cd templates
           COMPOSE_PROFILES=tunnel docker compose config --quiet
 
+      - name: Validate with graph profile
+        run: |
+          cd templates
+          COMPOSE_PROFILES=graph docker compose config --quiet
+
       - name: Validate with all profiles
         run: |
           cd templates
-          COMPOSE_PROFILES=ai,tunnel docker compose config --quiet
+          COMPOSE_PROFILES=ai,tunnel,graph docker compose config --quiet
 
   installer-syntax:
     name: Installer Syntax Check
@@ -155,6 +162,7 @@ jobs:
           echo "Checking scripts..."
           test -f scripts/post-consume-asn.py
           test -f scripts/remove-blank-pages.sh
+          test -f scripts/neo4j-sync.py
           echo "All template files present."
 
       - name: Verify no hardcoded secrets

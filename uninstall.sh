@@ -126,6 +126,13 @@ case "$choice" in
             success "Backup cron removed"
         fi
 
+        # Remove neo4j sync cron
+        if crontab -l 2>/dev/null | grep -qF "neo4j-sync.py"; then
+            info "Removing Neo4j sync cron job..."
+            crontab -l 2>/dev/null | grep -vF "neo4j-sync.py" | crontab - 2>/dev/null || true
+            success "Neo4j sync cron removed"
+        fi
+
         # Remove Docker images (optional)
         echo ""
         echo -ne "${BOLD}Also remove downloaded Docker images? (y/N): ${NC}"

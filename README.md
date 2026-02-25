@@ -44,15 +44,15 @@ This installer will:
   4. Start the Paperless-NGX stack
   5. Optionally set up backups and remote access
 
-[1/8] Installation Directory
+[1/9] Installation Directory
 Where should Paperless be installed?
   Path [/home/user/paperless]: ▌
 
-[2/8] Admin Credentials
+[2/9] Admin Credentials
   Username [admin]: ▌
   Password: ••••••••
 
-[3/8] Access Method
+[3/9] Access Method
 How will you access Paperless remotely?
   1) Tailscale — private mesh network (recommended)
   2) Cloudflare Tunnel — public domain, behind Cloudflare
@@ -61,7 +61,7 @@ How will you access Paperless remotely?
   5) Direct expose — open port to internet (not recommended)
 Enter choice [1-5]: ▌
 
-[4/8] AI-Powered Classification
+[4/9] AI-Powered Classification
 Choose your LLM provider for automatic document classification:
   1) Google AI (Gemini) — fast and affordable
   2) OpenAI (GPT-4o) — high accuracy
@@ -69,17 +69,18 @@ Choose your LLM provider for automatic document classification:
   4) Skip — no AI classification
 Enter choice [1-4]: ▌
 
-[5/8] OCR Languages
+[5/9] Document Graph (Neo4j)
+  1) Enable Neo4j graph database
+  2) Skip
+Enter choice [1-2]: ▌
+
+[6/9] OCR Languages
   1) English only
   2) German + English
   3) Custom (enter Tesseract language codes)
 Enter choice [1-3]: ▌
 
-[6/8] Timezone
-  Detected: Europe/Berlin
-  Timezone [Europe/Berlin]: ▌
-
-[7/8] Automated Backups
+[7/9] Automated Backups
   1) Google Drive
   2) Dropbox
   3) OneDrive
@@ -89,16 +90,12 @@ Enter choice [1-3]: ▌
   7) Skip — no backups
 Enter choice [1-7]: ▌
 
-[8/8] Review & Confirm
-  ┌─────────────────────────────────────┐
-  │ Install dir:  /home/user/paperless  │
-  │ Admin:        admin                 │
-  │ Access:       Tailscale             │
-  │ AI:           Google AI (Gemini)    │
-  │ OCR:          English               │
-  │ Timezone:     Europe/Berlin         │
-  │ Backups:      Google Drive          │
-  └─────────────────────────────────────┘
+[8/9] Email Integration
+  Set up email ingestion? (y/N): ▌
+
+[9/9] Timezone
+  Detected: Europe/Berlin
+  Timezone [Europe/Berlin]: ▌
 
   ╔══════════════════════════════════════════════════╗
   ║   Paperless Overconfigured is running!           ║
@@ -107,6 +104,7 @@ Enter choice [1-7]: ▌
   Services:
     paperless-ngx: Up (healthy)
     paperless-gpt: Up (healthy)
+    neo4j: Up (healthy)
     postgres: Up (healthy)
     redis: Up (healthy)
     gotenberg: Up (healthy)
@@ -133,6 +131,7 @@ graph TB
         direction TB
         P["Paperless-NGX<br/>Document Management"]
         GPT["paperless-gpt<br/><i>AI Classification</i>"]
+        N4J[("Neo4j<br/><i>Graph Database</i>")]
         DB[("PostgreSQL<br/>Database")]
         Redis[("Redis<br/>Cache & Queue")]
         Gotenberg["Gotenberg<br/>Document Conversion"]
@@ -174,6 +173,7 @@ graph TB
     Email --> P
     Upload --> P
     Mobile --> P
+    P --> N4J
     P --> Backup
 ```
 
@@ -183,6 +183,7 @@ graph TB
 |---------|-------------|
 | **Paperless-NGX** | Core document management with full-text search, tagging, correspondents |
 | **AI Classification** | Automatic title, tags, correspondent, document type via LLM (Gemini/GPT/Ollama) |
+| **Document Graph (Neo4j)** | Relationship-based queries across documents, correspondents, tags, and types |
 | **ASN Barcode Tracking** | Physical filing system with QR code labels and fallback OCR detection |
 | **Blank Page Removal** | Automatically strips blank pages from scanned PDFs before import |
 | **Automated Backups** | Daily/weekly/monthly rotation to Google Drive, Dropbox, OneDrive, or encrypted GitHub |
@@ -221,6 +222,7 @@ cd ~/paperless && docker compose up -d
 | `LLM_PROVIDER` | AI provider (`googleai`, `openai`, `ollama`, `none`) | Set during install |
 | `LLM_MODEL` | Model name | Provider default |
 | `ACCESS_METHOD` | How to access (`tailscale`, `cloudflare`, `both`, `local`) | Set during install |
+| `ENABLE_GRAPH` | Neo4j graph database | `false` |
 | `ENABLE_BACKUPS` | Automated backups | `false` |
 
 ## Backup & Restore
@@ -288,6 +290,29 @@ For physical filing with printed labels:
 4. If the barcode scanner misses it, the fallback script tries corner-crop + upscale
 5. Last resort: OCR text extraction looks for `ASN` pattern
 
+### Graph Queries (Neo4j)
+
+When Neo4j is enabled, documents are synced into a graph database every 15 minutes. Open the Neo4j Browser at `http://localhost:7474` to run Cypher queries:
+
+```cypher
+-- All documents from a correspondent
+MATCH (d:Document)-[:SENT_BY]->(c:Correspondent {name: "Deutsche Bank"})
+RETURN d.title, d.created ORDER BY d.created DESC
+
+-- Related document clusters (shared tags)
+MATCH (d1:Document)-[:TAGGED_WITH]->(t:Tag)<-[:TAGGED_WITH]-(d2:Document)
+WHERE d1 <> d2
+WITH d1, d2, COUNT(t) AS shared
+WHERE shared >= 2
+RETURN d1.title, d2.title, shared ORDER BY shared DESC
+
+-- Everything connected to a specific document
+MATCH (d:Document {title: "Tax Return 2025"})-[*1..2]-(connected)
+RETURN d, connected
+```
+
+Manual sync: `python3 ~/paperless/scripts/neo4j-sync.py`
+
 ## Services
 
 | Container | Port | Memory | Role |
@@ -298,6 +323,7 @@ For physical filing with printed labels:
 | redis | 6379 | 256 MB | Cache and task queue |
 | gotenberg | 3000 | 512 MB | Document conversion |
 | tika | 9998 | 512 MB | Text extraction |
+| neo4j | 7474, 7687 | 1 GB | Graph database (optional) |
 | cloudflared | — | 128 MB | Cloudflare Tunnel (optional) |
 
 **Minimum requirements:** 4 GB RAM (8 GB recommended), 2 CPU cores, 20 GB disk
@@ -362,6 +388,7 @@ This project is built on top of amazing open-source software. Huge thanks to:
 - [**Apache Tika**](https://github.com/apache/tika) — Content analysis and text extraction
 - [**PostgreSQL**](https://www.postgresql.org/) — The database engine
 - [**Redis**](https://github.com/redis/redis) — Cache and task queue
+- [**Neo4j**](https://neo4j.com/) — Graph database for document relationship queries
 - [**Cloudflare Tunnel**](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — Secure tunneling without open ports
 - [**Tailscale**](https://tailscale.com/) — Private mesh networking
 - [**Ollama**](https://github.com/ollama/ollama) — Local LLM inference
