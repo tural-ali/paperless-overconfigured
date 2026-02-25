@@ -1,5 +1,9 @@
 # Paperless Overconfigured
 
+[![CI](https://github.com/tural-ali/paperless-overconfigured/actions/workflows/ci.yml/badge.svg)](https://github.com/tural-ali/paperless-overconfigured/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/tural-ali/paperless-overconfigured)](https://github.com/tural-ali/paperless-overconfigured/releases)
+
 > A production-ready, AI-powered document management stack. One command. A few questions. Stack running.
 
 Paperless-NGX with batteries included: AI classification, automated backups, ASN barcode tracking, secure remote access, and blank page removal. Everything configured with best practices out of the box.
@@ -15,6 +19,106 @@ The installer will:
 2. Walk you through configuration (access method, AI provider, backups, etc.)
 3. Generate all config files and start the stack
 4. Set up automated backups if you choose
+
+<details>
+<summary><b>See the installer in action</b></summary>
+
+```
+  ██████╗  █████╗ ██████╗ ███████╗██████╗ ██╗     ███████╗███████╗███████╗
+  ██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗██║     ██╔════╝██╔════╝██╔════╝
+  ██████╔╝███████║██████╔╝█████╗  ██████╔╝██║     █████╗  ███████╗███████╗
+  ██╔═══╝ ██╔══██║██╔═══╝ ██╔══╝  ██╔══██╗██║     ██╔══╝  ╚════██║╚════██║
+  ██║     ██║  ██║██║     ███████╗██║  ██║███████╗███████╗███████║███████║
+  ╚═╝     ╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝╚══════╝
+                         OVERCONFIGURED
+
+  A production-ready, AI-powered document management stack.
+  Paperless-NGX + AI classification + automated backups.
+
+[OK] Detected: debian (amd64)
+
+This installer will:
+  1. Install dependencies (Docker, etc.)
+  2. Ask you a few questions to configure the stack
+  3. Generate all config files
+  4. Start the Paperless-NGX stack
+  5. Optionally set up backups and remote access
+
+[1/8] Installation Directory
+Where should Paperless be installed?
+  Path [/home/user/paperless]: ▌
+
+[2/8] Admin Credentials
+  Username [admin]: ▌
+  Password: ••••••••
+
+[3/8] Access Method
+How will you access Paperless remotely?
+  1) Tailscale — private mesh network (recommended)
+  2) Cloudflare Tunnel — public domain, behind Cloudflare
+  3) Both Tailscale + Cloudflare Tunnel
+  4) Local only — localhost access, no remote
+  5) Direct expose — open port to internet (not recommended)
+Enter choice [1-5]: ▌
+
+[4/8] AI-Powered Classification
+Choose your LLM provider for automatic document classification:
+  1) Google AI (Gemini) — fast and affordable
+  2) OpenAI (GPT-4o) — high accuracy
+  3) Ollama — local LLM, no API costs
+  4) Skip — no AI classification
+Enter choice [1-4]: ▌
+
+[5/8] OCR Languages
+  1) English only
+  2) German + English
+  3) Custom (enter Tesseract language codes)
+Enter choice [1-3]: ▌
+
+[6/8] Timezone
+  Detected: Europe/Berlin
+  Timezone [Europe/Berlin]: ▌
+
+[7/8] Automated Backups
+  1) Google Drive
+  2) Dropbox
+  3) OneDrive
+  4) Encrypted to GitHub
+  5) Custom rclone remote
+  6) Local backups only
+  7) Skip — no backups
+Enter choice [1-7]: ▌
+
+[8/8] Review & Confirm
+  ┌─────────────────────────────────────┐
+  │ Install dir:  /home/user/paperless  │
+  │ Admin:        admin                 │
+  │ Access:       Tailscale             │
+  │ AI:           Google AI (Gemini)    │
+  │ OCR:          English               │
+  │ Timezone:     Europe/Berlin         │
+  │ Backups:      Google Drive          │
+  └─────────────────────────────────────┘
+
+  ╔══════════════════════════════════════════════════╗
+  ║   Paperless Overconfigured is running!           ║
+  ╚══════════════════════════════════════════════════╝
+
+  Services:
+    paperless-ngx: Up (healthy)
+    paperless-gpt: Up (healthy)
+    postgres: Up (healthy)
+    redis: Up (healthy)
+    gotenberg: Up (healthy)
+    tika: Up (healthy)
+
+  Access:
+    Paperless: https://my-server:8000
+
+  Admin: admin / (your password)
+```
+
+</details>
 
 ## Architecture
 
@@ -264,20 +368,37 @@ This project is built on top of amazing open-source software. Huge thanks to:
 - [**rclone**](https://github.com/rclone/rclone) — Cloud storage sync for backups
 - [**Docker**](https://www.docker.com/) — Containerization
 
-## Disclaimer
+## Uninstall
 
-This project is **not affiliated with, endorsed by, or sponsored by** any of the projects listed above, including Paperless-NGX, Cloudflare, Tailscale, Google, OpenAI, or any other mentioned service or software.
+To remove Paperless Overconfigured:
 
-This repository is created and maintained as a **personal hobby project**. It is provided as-is, with no warranties or guarantees of any kind.
+```bash
+cd ~/paperless
+./uninstall.sh
+```
 
-**You are solely responsible for:**
-- Your data, documents, and backups
-- The security of your installation and credentials
-- Any data loss, leakage, or corruption that may occur
-- Compliance with applicable laws and regulations (including GDPR, data residency, etc.)
-- Reviewing and understanding the configuration before deploying to production
+Interactive menu with three levels:
+1. **Stop only** — stop containers, keep all data
+2. **Stop + remove volumes** — removes database and Redis data
+3. **Full removal** — removes everything including documents, config, and cron jobs
 
-Always keep independent backups of your important documents. Test your backup and restore procedures regularly.
+---
+
+> [!CAUTION]
+> ## Disclaimer
+>
+> This project is **not affiliated with, endorsed by, or sponsored by** any of the projects listed above, including Paperless-NGX, Cloudflare, Tailscale, Google, OpenAI, or any other mentioned service or software.
+>
+> This repository is created and maintained as a **personal hobby project**. It is provided as-is, with **no warranties or guarantees of any kind**.
+>
+> **You are solely responsible for:**
+> - Your data, documents, and backups
+> - The security of your installation and credentials
+> - Any data loss, leakage, or corruption that may occur
+> - Compliance with applicable laws and regulations (including GDPR, data residency, etc.)
+> - Reviewing and understanding the configuration before deploying to production
+>
+> **Always keep independent backups of your important documents. Test your backup and restore procedures regularly.**
 
 ## License
 

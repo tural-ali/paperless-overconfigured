@@ -11,7 +11,7 @@ echo "Started at: $(date)" | tee -a "$LOG_FILE"
 TOTAL=0
 MODIFIED=0
 
-find "$ORIGINALS_DIR" -name "*.pdf" -type f | while read PDF; do
+find "$ORIGINALS_DIR" -name "*.pdf" -type f | while read -r PDF; do
     TOTAL=$((TOTAL + 1))
     
     BEFORE=$(qpdf --show-npages "$PDF" 2>/dev/null)

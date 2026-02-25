@@ -10,6 +10,7 @@
 # ╚══════════════════════════════════════════════════════════════╝
 
 set -euo pipefail
+# shellcheck source=/dev/null
 
 # ── Colors ────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -75,6 +76,7 @@ generate_password() {
 # ── OS Detection ──────────────────────────────────────────────
 detect_os() {
     if [ -f /etc/os-release ]; then
+        # shellcheck disable=SC1091
         . /etc/os-release
         case "$ID" in
             ubuntu|debian|pop|linuxmint) echo "debian" ;;
@@ -93,7 +95,7 @@ detect_arch() {
     case "$(uname -m)" in
         x86_64|amd64) echo "amd64" ;;
         aarch64|arm64) echo "arm64" ;;
-        *) echo "$(uname -m)" ;;
+        *) uname -m ;;
     esac
 }
 
@@ -779,7 +781,7 @@ if [ -f "$SCRIPT_DIR/templates/docker-compose.yml" ]; then
 else
     info "Downloading configuration files..."
     REPO_DIR=$(mktemp -d)
-    trap "rm -rf $REPO_DIR" EXIT
+    trap 'rm -rf "$REPO_DIR"' EXIT
     if command -v git &>/dev/null; then
         git clone --depth 1 https://github.com/tural-ali/paperless-overconfigured.git "$REPO_DIR" 2>/dev/null
     else
@@ -1246,4 +1248,5 @@ echo ""
 echo -e "  ${DIM}To reconfigure: edit $INSTALL_DIR/.env and run 'docker compose up -d'${NC}"
 echo -e "  ${DIM}To stop: cd $INSTALL_DIR && docker compose down${NC}"
 echo -e "  ${DIM}To update: cd $INSTALL_DIR && docker compose pull && docker compose up -d${NC}"
+echo -e "  ${DIM}To uninstall: cd $INSTALL_DIR && ./uninstall.sh${NC}"
 echo ""

@@ -15,7 +15,7 @@ command -v pdftoppm > /dev/null || exit 0
 command -v convert > /dev/null || exit 0
 
 TEMP_DIR=$(mktemp -d)
-trap "rm -rf $TEMP_DIR" EXIT
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # Split PDF into individual pages
 mkdir -p "$TEMP_DIR/pages"
@@ -55,10 +55,12 @@ for page in "$TEMP_DIR/pages"/page-*.pdf; do
 done
 
 # Rebuild if we removed pages
-ORIGINAL_COUNT=$(ls "$TEMP_DIR/pages"/page-*.pdf 2>/dev/null | wc -l)
+ORIGINAL_COUNT=$(find "$TEMP_DIR/pages" -name "page-*.pdf" 2>/dev/null | wc -l)
+# shellcheck disable=SC2086
 KEEP_COUNT=$(echo $PAGES_TO_KEEP | wc -w)
 
 if [ "$KEEP_COUNT" -lt "$ORIGINAL_COUNT" ] && [ "$KEEP_COUNT" -gt 0 ]; then
+    # shellcheck disable=SC2086
     qpdf --empty --pages $PAGES_TO_KEEP -- "$INPUT_FILE" 2>/dev/null
 fi
 

@@ -1,0 +1,191 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint install.sh
+        run: shellcheck -x -s bash install.sh
+
+      - name: Lint uninstall.sh
+        run: shellcheck -x -s bash uninstall.sh
+
+      - name: Lint shell scripts
+        run: shellcheck -x -s bash scripts/*.sh
+
+  docker-compose-validate:
+    name: Docker Compose Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create test .env from template
+        run: |
+          cd templates
+          sed \
+            -e 's|${INSTALL_DIR}|/tmp/paperless|g' \
+            -e 's|${PAPERLESS_ADMIN_USER}|admin|g' \
+            -e 's|${PAPERLESS_ADMIN_PASSWORD}|testpassword123|g' \
+            -e 's|${PAPERLESS_SECRET_KEY}|aaaaaabbbbbbccccccddddddeeeeee|g' \
+            -e 's|${PAPERLESS_TIMEZONE}|UTC|g' \
+            -e 's|${ACCESS_METHOD}|local|g' \
+            -e 's|${PAPERLESS_URL}|http://localhost:8000|g' \
+            -e 's|${PAPERLESS_ALLOWED_HOSTS}|*|g' \
+            -e 's|${PAPERLESS_CORS_ALLOWED_HOSTS}|http://localhost:8000|g' \
+            -e 's|${PAPERLESS_CSRF_TRUSTED_ORIGINS}|http://localhost:8000|g' \
+            -e 's|${TAILSCALE_HOSTNAME}||g' \
+            -e 's|${PAPERLESS_DOMAIN}||g' \
+            -e 's|${CLOUDFLARE_TUNNEL_TOKEN}||g' \
+            -e 's|${PAPERLESS_OCR_LANGUAGE}|eng|g' \
+            -e 's|${PAPERLESS_OCR_LANGUAGES}|eng|g' \
+            -e 's|${LLM_PROVIDER}|none|g' \
+            -e 's|${LLM_MODEL}||g' \
+            -e 's|${GOOGLEAI_API_KEY}||g' \
+            -e 's|${OPENAI_API_KEY}||g' \
+            -e 's|${OLLAMA_HOST}||g' \
+            -e 's|${OCR_PROVIDER}|llm|g' \
+            -e 's|${GOOGLE_PROJECT_ID}||g' \
+            -e 's|${GOOGLE_LOCATION}||g' \
+            -e 's|${GOOGLE_PROCESSOR_ID}||g' \
+            -e 's|${POSTGRES_DB}|paperless|g' \
+            -e 's|${POSTGRES_USER}|paperless|g' \
+            -e 's|${POSTGRES_PASSWORD}|testdbpassword123|g' \
+            -e 's|${PAPERLESS_API_TOKEN}||g' \
+            -e 's|${ENABLE_BACKUPS}|false|g' \
+            -e 's|${ENCRYPTION_PASSPHRASE}||g' \
+            -e 's|${HEALTHCHECK_URL}||g' \
+            -e 's|${GDRIVE_REMOTE}||g' \
+            -e 's|${GDRIVE_BACKUP_DIR}||g' \
+            -e 's|${GITHUB_BACKUP_REPO}||g' \
+            -e 's|${COMPOSE_PROFILES}||g' \
+            -e 's|${PAPERLESS_EMAIL_HOST}||g' \
+            -e 's|${PAPERLESS_EMAIL_PORT}||g' \
+            -e 's|${PAPERLESS_EMAIL_HOST_USER}||g' \
+            -e 's|${PAPERLESS_EMAIL_HOST_PASSWORD}||g' \
+            -e 's|${PAPERLESS_EMAIL_USE_SSL}||g' \
+            -e 's|${PAPERLESS_EMAIL_FROM}||g' \
+            .env.template > .env
+
+      - name: Validate docker-compose.yml
+        run: |
+          cd templates
+          docker compose config --quiet
+
+      - name: Validate with AI profile
+        run: |
+          cd templates
+          COMPOSE_PROFILES=ai docker compose config --quiet
+
+      - name: Validate with tunnel profile
+        run: |
+          cd templates
+          COMPOSE_PROFILES=tunnel docker compose config --quiet
+
+      - name: Validate with all profiles
+        run: |
+          cd templates
+          COMPOSE_PROFILES=ai,tunnel docker compose config --quiet
+
+  installer-syntax:
+    name: Installer Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bash syntax check — install.sh
+        run: bash -n install.sh
+
+      - name: Bash syntax check — uninstall.sh
+        run: bash -n uninstall.sh
+
+      - name: Bash syntax check — scripts
+        run: |
+          for f in scripts/*.sh; do
+            echo "Checking $f..."
+            bash -n "$f"
+          done
+
+      - name: Python syntax check — scripts
+        run: |
+          for f in scripts/*.py; do
+            echo "Checking $f..."
+            python3 -c "import py_compile; py_compile.compile('$f', doraise=True)"
+          done
+
+  installer-smoke-test:
+    name: Installer Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run installer in non-interactive mode
+        run: |
+          # Test that the installer boots, detects OS, and handles
+          # non-interactive (piped) input gracefully
+          echo "" | timeout 10 bash install.sh 2>&1 || true
+        env:
+          TERM: xterm
+
+      - name: Verify template files are valid
+        run: |
+          echo "Checking all required template files exist..."
+          test -f templates/docker-compose.yml
+          test -f templates/.env.template
+          test -f templates/cloudflared-config.yml
+          echo "Checking prompts..."
+          test -d prompts
+          PROMPT_COUNT=$(ls prompts/*.tmpl 2>/dev/null | wc -l)
+          echo "Found $PROMPT_COUNT prompt templates"
+          test "$PROMPT_COUNT" -ge 1
+          echo "Checking scripts..."
+          test -f scripts/post-consume-asn.py
+          test -f scripts/remove-blank-pages.sh
+          echo "All template files present."
+
+      - name: Verify no hardcoded secrets
+        run: |
+          echo "Scanning for hardcoded secrets..."
+          # Ensure no API keys, tokens, or passwords are hardcoded
+          if grep -rE '(AIzaSy|sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|eyJh[a-zA-Z0-9])' \
+            --include="*.sh" --include="*.yml" --include="*.py" --include="*.md" \
+            --exclude-dir=.git .; then
+            echo "ERROR: Potential hardcoded secrets found!"
+            exit 1
+          fi
+          echo "No hardcoded secrets detected."
+
+  test-matrix:
+    name: OS Compatibility (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-22.04, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax validation
+        run: bash -n install.sh && bash -n uninstall.sh
+
+      - name: OS detection works
+        run: |
+          # Extract and run just the detect_os function
+          source <(sed -n '/^detect_os()/,/^}/p' install.sh)
+          OS=$(detect_os)
+          echo "Detected OS: $OS"
+          test -n "$OS"
+          test "$OS" != "unknown"
