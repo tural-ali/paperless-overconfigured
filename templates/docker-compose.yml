@@ -1,0 +1,246 @@
+services:
+
+  broker:
+    image: redis:7-alpine
+    container_name: paperless-redis
+    read_only: true
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      REDIS_ARGS: "--save 300 1"
+    restart: unless-stopped
+    volumes:
+      - ${INSTALL_DIR}/redis:/data
+    networks:
+      - paperless-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  db:
+    image: postgres:16-alpine
+    container_name: paperless-db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-d", "${POSTGRES_DB}", "-U", "${POSTGRES_USER}"]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ${INSTALL_DIR}/db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c work_mem=8MB
+      -c effective_cache_size=384MB
+      -c random_page_cost=1.1
+    networks:
+      - paperless-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  gotenberg:
+    image: docker.io/gotenberg/gotenberg:8.7
+    container_name: paperless-gotenberg
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=.*"
+    networks:
+      - paperless-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  tika:
+    image: apache/tika:latest
+    container_name: paperless-tika
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - paperless-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless-ngx
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-S", "--max-time", "2", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+      gotenberg:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ${INSTALL_DIR}/data:/usr/src/paperless/data
+      - ${INSTALL_DIR}/media:/usr/src/paperless/media
+      - ${INSTALL_DIR}/export:/usr/src/paperless/export
+      - ${INSTALL_DIR}/consume:/usr/src/paperless/consume
+      - ${INSTALL_DIR}/scripts:/usr/src/paperless/scripts
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBNAME: ${POSTGRES_DB}
+      PAPERLESS_DBUSER: ${POSTGRES_USER}
+      PAPERLESS_DBPASS: ${POSTGRES_PASSWORD}
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000
+      PAPERLESS_TIKA_ENDPOINT: http://tika:9998
+      PAPERLESS_TIME_ZONE: ${PAPERLESS_TIMEZONE}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_ADMIN_USER: ${PAPERLESS_ADMIN_USER}
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}
+      PAPERLESS_URL: ${PAPERLESS_URL}
+      PAPERLESS_ALLOWED_HOSTS: ${PAPERLESS_ALLOWED_HOSTS}
+      PAPERLESS_CORS_ALLOWED_HOSTS: ${PAPERLESS_CORS_ALLOWED_HOSTS}
+      PAPERLESS_CSRF_TRUSTED_ORIGINS: ${PAPERLESS_CSRF_TRUSTED_ORIGINS}
+      # OCR
+      PAPERLESS_OCR_LANGUAGE: ${PAPERLESS_OCR_LANGUAGE}
+      PAPERLESS_OCR_LANGUAGES: ${PAPERLESS_OCR_LANGUAGES}
+      PAPERLESS_OCR_MODE: skip
+      PAPERLESS_OCR_SKIP_ARCHIVE_FILE: with_text
+      PAPERLESS_OCR_CLEAN: none
+      PAPERLESS_OCR_DPI: 300
+      PAPERLESS_OCR_CACHING: "true"
+      PAPERLESS_OCR_USER_ARGS: '{"invalidate_digital_signatures": true}'
+      # Consumer
+      PAPERLESS_CONSUMER_POLLING: 10
+      PAPERLESS_CONSUMER_RECURSIVE: "true"
+      PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS: "false"
+      PAPERLESS_CONSUMER_DELETE_DUPLICATES: "true"
+      PAPERLESS_CONSUMER_RETRY_COUNT: 3
+      # ASN barcode detection
+      PAPERLESS_CONSUMER_ENABLE_BARCODES: "true"
+      PAPERLESS_CONSUMER_ENABLE_ASN_BARCODE: "true"
+      PAPERLESS_CONSUMER_ASN_BARCODE_PREFIX: "ASN"
+      PAPERLESS_CONSUMER_BARCODE_SCANNER: "ZXING"
+      PAPERLESS_CONSUMER_BARCODE_PAGES: 0
+      PAPERLESS_CONSUMER_BARCODE_DPI: 600
+      PAPERLESS_CONSUMER_BARCODE_UPSCALE: 1.5
+      PAPERLESS_POST_CONSUME_SCRIPT: /usr/src/paperless/scripts/post-consume-asn.py
+      # File naming
+      PAPERLESS_FILENAME_FORMAT: "{{ correspondent|slugify }}/{{ created_year }}/{{ created }} {{ title|slugify }}"
+      PAPERLESS_FILENAME_FORMAT_REMOVE_NONE: "true"
+      PAPERLESS_FILENAME_DATE_ORDER: "YMD"
+      # Performance
+      PAPERLESS_TASK_WORKERS: 2
+      PAPERLESS_THREADS_PER_WORKER: 2
+      PAPERLESS_DEBUG: "false"
+      # Proxy
+      PAPERLESS_USE_X_FORWARD_HOST: "true"
+      PAPERLESS_USE_X_FORWARD_PORT: "true"
+      PAPERLESS_PROXY_SSL_HEADER: '["HTTP_X_FORWARDED_PROTO", "https"]'
+      # Email (optional)
+      PAPERLESS_EMAIL_HOST: ${PAPERLESS_EMAIL_HOST}
+      PAPERLESS_EMAIL_PORT: ${PAPERLESS_EMAIL_PORT}
+      PAPERLESS_EMAIL_HOST_USER: ${PAPERLESS_EMAIL_HOST_USER}
+      PAPERLESS_EMAIL_HOST_PASSWORD: ${PAPERLESS_EMAIL_HOST_PASSWORD}
+      PAPERLESS_EMAIL_USE_SSL: ${PAPERLESS_EMAIL_USE_SSL}
+      PAPERLESS_EMAIL_FROM: ${PAPERLESS_EMAIL_FROM}
+    networks:
+      - paperless-net
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+
+  # ── AI Classification (optional, --profile ai) ──────────
+  paperless-gpt:
+    image: icereed/paperless-gpt:latest
+    container_name: paperless-gpt
+    profiles:
+      - ai
+    environment:
+      PAPERLESS_BASE_URL: "http://paperless:8000"
+      PAPERLESS_API_TOKEN: "${PAPERLESS_API_TOKEN}"
+      PAPERLESS_PUBLIC_URL: "${PAPERLESS_URL}"
+      MANUAL_TAG: "paperless-gpt"
+      AUTO_TAG: "paperless-gpt-auto"
+      LLM_PROVIDER: "${LLM_PROVIDER}"
+      LLM_MODEL: "${LLM_MODEL}"
+      GOOGLEAI_API_KEY: "${GOOGLEAI_API_KEY}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      OLLAMA_HOST: "${OLLAMA_HOST}"
+      TOKEN_LIMIT: 0
+      OCR_PROVIDER: "${OCR_PROVIDER}"
+      OCR_PROCESS_MODE: "whole_pdf"
+      GOOGLE_PROJECT_ID: "${GOOGLE_PROJECT_ID}"
+      GOOGLE_LOCATION: "${GOOGLE_LOCATION}"
+      GOOGLE_PROCESSOR_ID: "${GOOGLE_PROCESSOR_ID}"
+      GOOGLE_APPLICATION_CREDENTIALS: "/app/credentials.json"
+      AUTO_OCR_TAG: "paperless-gpt-ocr-auto"
+      OCR_LIMIT_PAGES: "5"
+      LOG_LEVEL: "info"
+    volumes:
+      - ${INSTALL_DIR}/prompts:/app/prompts
+      - ${INSTALL_DIR}/google-ai.json:/app/credentials.json
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      paperless:
+        condition: service_healthy
+    networks:
+      - paperless-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ── Cloudflare Tunnel (optional, --profile tunnel) ──────
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: paperless-cloudflared
+    profiles:
+      - tunnel
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - paperless-net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+networks:
+  paperless-net:
+    driver: bridge

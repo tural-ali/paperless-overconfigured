@@ -1,0 +1,20 @@
+# Secrets
+.env
+*.pem
+*.key
+credentials.json
+google-ai.json
+
+# Backups
+*.enc
+*.zip
+backups/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+*.log
+*.tmp
+/tmp/

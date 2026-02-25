@@ -1,0 +1,5 @@
+tunnel: TUNNEL_ID
+ingress:
+  - hostname: PAPERLESS_DOMAIN
+    service: http://paperless:8000
+  - service: http_status:404
