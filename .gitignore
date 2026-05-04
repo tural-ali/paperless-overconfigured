@@ -18,3 +18,11 @@ Thumbs.db
 *.log
 *.tmp
 /tmp/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/

@@ -55,21 +55,23 @@ SCRIPT_PATH="${BATS_TEST_DIRNAME}/../scripts/remove-blank-pages.sh"
 
 # ─────────────────────────────────────────────────────────────
 # Tests for blank page detection threshold
+# Note: A page is considered to have content when mean < 0.995
+# (less than 99.5% white pixels). Pages with mean >= 0.995 are blank.
 # ─────────────────────────────────────────────────────────────
 
-@test "page with mean 0.99 is considered blank" {
+@test "page with mean 0.99 has content (below threshold)" {
     STATS=0.99
     HAS_CONTENT=$(awk "BEGIN {print ($STATS < 0.995) ? 1 : 0}")
     [ "$HAS_CONTENT" = "1" ]
 }
 
-@test "page with mean 0.999 is considered blank" {
+@test "page with mean 0.999 is blank (above threshold)" {
     STATS=0.999
     HAS_CONTENT=$(awk "BEGIN {print ($STATS < 0.995) ? 1 : 0}")
     [ "$HAS_CONTENT" = "0" ]
 }
 
-@test "page with mean 0.995 is considered blank" {
+@test "page with mean 0.995 is blank (at threshold)" {
     STATS=0.995
     HAS_CONTENT=$(awk "BEGIN {print ($STATS < 0.995) ? 1 : 0}")
     [ "$HAS_CONTENT" = "0" ]
