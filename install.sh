@@ -266,81 +266,77 @@ case "$ACCESS_CHOICE" in
 esac
 
 # ──────────────────────────────────────────────────────────────
-step "[4/9] AI-Powered Document Classification"
-echo -e "${DIM}paperless-gpt automatically classifies, tags, and titles your documents.${NC}"
-echo -e "${DIM}It requires an LLM provider. You can skip this and add it later.${NC}"
+step "[4/9] AI-Powered Document Classification (v3 native)"
+echo -e "${DIM}Paperless-NGX v3 has native AI built in — no side container needed.${NC}"
+echo -e "${DIM}It auto-suggests titles, tags, correspondents, and document types.${NC}"
+echo -e "${DIM}You can skip this and enable it later by editing .env.${NC}"
 echo ""
-echo -e "  ${CYAN}1)${NC} ${GREEN}Google AI (Gemini) — recommended${NC}"
-echo -e "     ${DIM}Fast, cheap (~\$0.001/document). Get key: https://aistudio.google.com${NC}"
+echo -e "  ${CYAN}1)${NC} ${GREEN}Google Gemini — recommended (fast + cheap + high quality)${NC}"
+echo -e "     ${DIM}Uses Gemini's OpenAI-compatible endpoint. ~\$0.003/document.${NC}"
+echo -e "     ${DIM}Get key: https://aistudio.google.com/apikey${NC}"
 echo ""
-echo -e "  ${CYAN}2)${NC} OpenAI (GPT-4o)"
-echo -e "     ${DIM}High quality. Get key: https://platform.openai.com/api-keys${NC}"
+echo -e "  ${CYAN}2)${NC} OpenAI (GPT-4o-mini)"
+echo -e "     ${DIM}Native support. Get key: https://platform.openai.com/api-keys${NC}"
 echo ""
-echo -e "  ${CYAN}3)${NC} Ollama (local LLM)"
-echo -e "     ${DIM}Fully private. Requires Ollama running locally or on your network.${NC}"
+echo -e "  ${CYAN}3)${NC} Ollama (local, fully private)"
+echo -e "     ${DIM}Requires Ollama running locally or on your network.${NC}"
 echo ""
-echo -e "  ${CYAN}4)${NC} Skip — no AI classification"
+echo -e "  ${CYAN}4)${NC} Skip — no AI"
 echo ""
 prompt "Enter choice [1-4]: "
 read -r AI_CHOICE
 
-LLM_PROVIDER="none"
-LLM_MODEL=""
-GOOGLEAI_API_KEY=""
-OPENAI_API_KEY=""
-OLLAMA_HOST=""
-OCR_PROVIDER="llm"
-GOOGLE_PROJECT_ID=""
-GOOGLE_LOCATION=""
-GOOGLE_PROCESSOR_ID=""
+PAPERLESS_AI_ENABLED="false"
+PAPERLESS_AI_LLM_BACKEND=""
+PAPERLESS_AI_LLM_MODEL=""
+PAPERLESS_AI_LLM_API_KEY=""
+PAPERLESS_AI_LLM_ENDPOINT=""
+PAPERLESS_AI_LLM_OUTPUT_LANGUAGE="en"
+PAPERLESS_AI_LLM_REQUEST_TIMEOUT="60"
+PAPERLESS_AI_LLM_EMBEDDING_BACKEND=""
+PAPERLESS_AI_LLM_EMBEDDING_MODEL=""
+PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT=""
 
 case "$AI_CHOICE" in
     1)
-        LLM_PROVIDER="googleai"
-        LLM_MODEL="gemini-2.5-flash"
-        if [ -n "$COMPOSE_PROFILES" ]; then
-            COMPOSE_PROFILES="${COMPOSE_PROFILES},ai"
-        else
-            COMPOSE_PROFILES="ai"
-        fi
-        ask GOOGLEAI_API_KEY "Google AI API key" ""
-        ask LLM_MODEL "Model name" "gemini-2.5-flash"
-        echo ""
-        echo -e "${DIM}Optional: Google Document AI for high-quality OCR (requires GCP project)${NC}"
-        prompt "Set up Document AI OCR? (y/N): "
-        read -r docai
-        if [[ "$docai" =~ ^[Yy] ]]; then
-            OCR_PROVIDER="google_docai"
-            ask GOOGLE_PROJECT_ID "GCP Project ID" ""
-            ask GOOGLE_LOCATION "Location" "eu"
-            ask GOOGLE_PROCESSOR_ID "Processor ID" ""
-            echo -e "${DIM}Place your service account JSON at: $INSTALL_DIR/google-ai.json${NC}"
-        fi
+        # Gemini via OpenAI-compat endpoint. Note: embedding model name
+        # differs — Gemini requires 'gemini-embedding-001', not the
+        # OpenAI 'text-embedding-*' names.
+        PAPERLESS_AI_ENABLED="true"
+        PAPERLESS_AI_LLM_BACKEND="openai-like"
+        PAPERLESS_AI_LLM_ENDPOINT="https://generativelanguage.googleapis.com/v1beta/openai/"
+        PAPERLESS_AI_LLM_MODEL="gemini-2.5-flash"
+        PAPERLESS_AI_LLM_EMBEDDING_BACKEND="openai-like"
+        PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT="https://generativelanguage.googleapis.com/v1beta/openai/"
+        PAPERLESS_AI_LLM_EMBEDDING_MODEL="gemini-embedding-001"
+        ask PAPERLESS_AI_LLM_API_KEY "Google AI API key" ""
+        ask PAPERLESS_AI_LLM_MODEL "Chat model" "gemini-2.5-flash"
+        ask PAPERLESS_AI_LLM_OUTPUT_LANGUAGE "AI output language (en/de/fr/...)" "en"
         ;;
     2)
-        LLM_PROVIDER="openai"
-        LLM_MODEL="gpt-4o"
-        if [ -n "$COMPOSE_PROFILES" ]; then
-            COMPOSE_PROFILES="${COMPOSE_PROFILES},ai"
-        else
-            COMPOSE_PROFILES="ai"
-        fi
-        ask OPENAI_API_KEY "OpenAI API key" ""
-        ask LLM_MODEL "Model name" "gpt-4o"
+        PAPERLESS_AI_ENABLED="true"
+        PAPERLESS_AI_LLM_BACKEND="openai-like"
+        PAPERLESS_AI_LLM_ENDPOINT="https://api.openai.com/v1/"
+        PAPERLESS_AI_LLM_MODEL="gpt-4o-mini"
+        PAPERLESS_AI_LLM_EMBEDDING_BACKEND="openai-like"
+        PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT="https://api.openai.com/v1/"
+        PAPERLESS_AI_LLM_EMBEDDING_MODEL="text-embedding-3-small"
+        ask PAPERLESS_AI_LLM_API_KEY "OpenAI API key" ""
+        ask PAPERLESS_AI_LLM_MODEL "Chat model" "gpt-4o-mini"
+        ask PAPERLESS_AI_LLM_OUTPUT_LANGUAGE "AI output language (en/de/fr/...)" "en"
         ;;
     3)
-        LLM_PROVIDER="ollama"
-        LLM_MODEL="llama3"
-        if [ -n "$COMPOSE_PROFILES" ]; then
-            COMPOSE_PROFILES="${COMPOSE_PROFILES},ai"
-        else
-            COMPOSE_PROFILES="ai"
-        fi
-        ask OLLAMA_HOST "Ollama URL" "http://host.docker.internal:11434"
-        ask LLM_MODEL "Model name" "llama3"
+        PAPERLESS_AI_ENABLED="true"
+        PAPERLESS_AI_LLM_BACKEND="ollama"
+        PAPERLESS_AI_LLM_EMBEDDING_BACKEND="ollama"
+        ask PAPERLESS_AI_LLM_ENDPOINT "Ollama URL" "http://host.docker.internal:11434"
+        PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT="$PAPERLESS_AI_LLM_ENDPOINT"
+        ask PAPERLESS_AI_LLM_MODEL "Chat model" "llama3.1"
+        ask PAPERLESS_AI_LLM_EMBEDDING_MODEL "Embedding model" "nomic-embed-text"
+        ask PAPERLESS_AI_LLM_OUTPUT_LANGUAGE "AI output language (en/de/fr/...)" "en"
         ;;
     4)
-        info "Skipping AI classification. You can enable it later in .env"
+        info "Skipping AI. Enable later by setting PAPERLESS_AI_ENABLED=true in .env"
         ;;
     *)
         info "Skipping AI."
@@ -767,16 +763,18 @@ CLOUDFLARE_TUNNEL_TOKEN=$CLOUDFLARE_TUNNEL_TOKEN
 PAPERLESS_OCR_LANGUAGE=$OCR_LANGUAGE
 PAPERLESS_OCR_LANGUAGES=$OCR_EXTRA_LANGUAGES
 
-# ── AI / LLM ──
-LLM_PROVIDER=$LLM_PROVIDER
-LLM_MODEL=$LLM_MODEL
-GOOGLEAI_API_KEY=$GOOGLEAI_API_KEY
-OPENAI_API_KEY=$OPENAI_API_KEY
-OLLAMA_HOST=$OLLAMA_HOST
-OCR_PROVIDER=$OCR_PROVIDER
-GOOGLE_PROJECT_ID=$GOOGLE_PROJECT_ID
-GOOGLE_LOCATION=$GOOGLE_LOCATION
-GOOGLE_PROCESSOR_ID=$GOOGLE_PROCESSOR_ID
+# ── AI / LLM (v3 native) ──
+PAPERLESS_VERSION=3.0.0
+PAPERLESS_AI_ENABLED=$PAPERLESS_AI_ENABLED
+PAPERLESS_AI_LLM_BACKEND=$PAPERLESS_AI_LLM_BACKEND
+PAPERLESS_AI_LLM_MODEL=$PAPERLESS_AI_LLM_MODEL
+PAPERLESS_AI_LLM_API_KEY=$PAPERLESS_AI_LLM_API_KEY
+PAPERLESS_AI_LLM_ENDPOINT=$PAPERLESS_AI_LLM_ENDPOINT
+PAPERLESS_AI_LLM_OUTPUT_LANGUAGE=$PAPERLESS_AI_LLM_OUTPUT_LANGUAGE
+PAPERLESS_AI_LLM_REQUEST_TIMEOUT=$PAPERLESS_AI_LLM_REQUEST_TIMEOUT
+PAPERLESS_AI_LLM_EMBEDDING_BACKEND=$PAPERLESS_AI_LLM_EMBEDDING_BACKEND
+PAPERLESS_AI_LLM_EMBEDDING_MODEL=$PAPERLESS_AI_LLM_EMBEDDING_MODEL
+PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT=$PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT
 
 # ── Neo4j Graph ──
 ENABLE_GRAPH=$ENABLE_GRAPH
@@ -852,10 +850,8 @@ if [ -d "$REPO_DIR/scripts" ]; then
     chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
 fi
 
-# ── Create google-ai.json placeholder if AI enabled ──────────
-if [ "$LLM_PROVIDER" != "none" ] && [ ! -f "$INSTALL_DIR/google-ai.json" ]; then
-    echo '{}' > "$INSTALL_DIR/google-ai.json"
-fi
+# v3 native AI needs no side files (no google-ai.json, no prompt templates).
+# All config lives in the PAPERLESS_AI_LLM_* env vars set above.
 
 success "All files deployed to $INSTALL_DIR"
 
@@ -1301,12 +1297,12 @@ echo "    Backup:     $INSTALL_DIR/backup.sh"
 echo "    Restore:    $INSTALL_DIR/restore.sh"
 echo ""
 
-if [ "$LLM_PROVIDER" != "none" ] && [[ "$COMPOSE_PROFILES" == *"ai"* ]]; then
+if [ "$PAPERLESS_AI_ENABLED" = "true" ]; then
     echo -e "  ${BOLD}Next steps:${NC}"
-    echo "    1. Open Paperless and upload your first document"
-    echo "    2. Generate an API token: Admin > Tokens"
-    echo "    3. Add the token to .env: PAPERLESS_API_TOKEN=your-token"
-    echo "    4. Restart: cd $INSTALL_DIR && docker compose up -d"
+    echo "    1. Open Paperless and upload a document"
+    echo "    2. AI tag/title/correspondent suggestions appear on the doc details page"
+    echo "    3. The initial LLM index rebuild runs in the background — first run takes"
+    echo "       a few minutes for large libraries (~1 min per ~500 docs on Gemini)"
 else
     echo -e "  ${BOLD}Next steps:${NC}"
     echo "    1. Open Paperless and upload your first document"

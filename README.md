@@ -102,9 +102,7 @@ Enter choice [1-7]: ▌
   ╚══════════════════════════════════════════════════╝
 
   Services:
-    paperless-ngx: Up (healthy)
-    paperless-gpt: Up (healthy)
-    neo4j: Up (healthy)
+    paperless-ngx: Up (healthy)      # v3 with native AI
     postgres: Up (healthy)
     redis: Up (healthy)
     gotenberg: Up (healthy)
@@ -129,17 +127,16 @@ graph TB
 
     subgraph Stack["Docker Stack"]
         direction TB
-        P["Paperless-NGX<br/>Document Management"]
-        GPT["paperless-gpt<br/><i>AI Classification</i>"]
-        N4J[("Neo4j<br/><i>Graph Database</i>")]
+        P["Paperless-NGX v3<br/><i>Document mgmt + native AI</i>"]
+        N4J[("Neo4j<br/><i>Graph Database (optional)</i>")]
         DB[("PostgreSQL<br/>Database")]
         Redis[("Redis<br/>Cache & Queue")]
         Gotenberg["Gotenberg<br/>Document Conversion"]
         Tika["Apache Tika<br/>Text Extraction"]
     end
 
-    subgraph AI["LLM Provider"]
-        Gemini["Google Gemini"]
+    subgraph AI["LLM Provider (v3 native)"]
+        Gemini["Google Gemini<br/><i>via OpenAI-compat</i>"]
         OpenAI["OpenAI GPT"]
         Ollama["Ollama<br/><i>Local LLM</i>"]
     end
@@ -164,10 +161,9 @@ graph TB
     P --> Redis
     P --> Gotenberg
     P --> Tika
-    GPT --> P
-    GPT --> Gemini
-    GPT --> OpenAI
-    GPT --> Ollama
+    P --> Gemini
+    P --> OpenAI
+    P --> Ollama
     Scanner --> GDrive
     GDrive --> P
     Email --> P
@@ -181,8 +177,8 @@ graph TB
 
 | Feature | Description |
 |---------|-------------|
-| **Paperless-NGX** | Core document management with full-text search, tagging, correspondents |
-| **AI Classification** | Automatic title, tags, correspondent, document type via LLM (Gemini/GPT/Ollama) |
+| **Paperless-NGX v3** | Core document management with full-text search, tagging, correspondents, and built-in AI |
+| **AI Classification** | Automatic title, tags, correspondent, document type via v3's native AI (Gemini via OpenAI-compat, OpenAI, or Ollama) |
 | **Document Graph (Neo4j)** | Relationship-based queries across documents, correspondents, tags, and types |
 | **ASN Barcode Tracking** | Physical filing system with QR code labels and fallback OCR detection |
 | **Blank Page Removal** | Automatically strips blank pages from scanned PDFs before import |
@@ -273,12 +269,23 @@ Non-destructive integrity check.
 
 ### AI Classification
 
-When AI is enabled, tagged documents are automatically processed:
+When AI is enabled, documents are automatically processed:
 
 1. Document arrives in Paperless
-2. paperless-gpt picks it up (via `paperless-gpt-auto` tag)
-3. LLM analyzes the document content
-4. Automatically assigns: title, correspondent, document type, tags, date
+2. Paperless-NGX v3's built-in AI processes it (no side container)
+3. LLM analyzes the document content and does a semantic-index lookup
+4. Suggests: title, correspondent, document type, tags, date
+
+**Provider notes:**
+- **Gemini** uses the OpenAI-compatible endpoint at
+  `https://generativelanguage.googleapis.com/v1beta/openai/`. Get a key at
+  [aistudio.google.com/apikey](https://aistudio.google.com/apikey). The
+  embedding model is `gemini-embedding-001` (NOT `text-embedding-004` — that
+  name is not accepted through the OpenAI-compat route).
+- **OpenAI** uses the standard `api.openai.com/v1/` endpoint.
+- **Ollama** runs locally — no data leaves your network. Best for privacy.
+
+Enable/disable at any time via `PAPERLESS_AI_ENABLED` in `.env`.
 
 ### ASN Barcode System
 
@@ -317,8 +324,7 @@ Manual sync: `python3 ~/paperless/scripts/neo4j-sync.py`
 
 | Container | Port | Memory | Role |
 |-----------|------|--------|------|
-| paperless-ngx | 8000 | 3 GB | Core document management |
-| paperless-gpt | 8080 | 256 MB | AI classification (optional) |
+| paperless-ngx | 8000 | 3 GB | Core document management + native AI (v3) |
 | postgres | 5432 | 512 MB | Database |
 | redis | 6379 | 256 MB | Cache and task queue |
 | gotenberg | 3000 | 512 MB | Document conversion |
@@ -382,8 +388,8 @@ df -h /
 
 This project is built on top of amazing open-source software. Huge thanks to:
 
-- [**Paperless-NGX**](https://github.com/paperless-ngx/paperless-ngx) — The core document management system that makes this all possible
-- [**paperless-gpt**](https://github.com/icereed/paperless-gpt) by [@icereed](https://github.com/icereed) — AI-powered document classification and OCR integration
+- [**Paperless-NGX**](https://github.com/paperless-ngx/paperless-ngx) — The core document management system with native AI (v3+)
+- [**paperless-gpt**](https://github.com/icereed/paperless-gpt) by [@icereed](https://github.com/icereed) — The AI companion that carried classification duties in earlier versions of this installer, now replaced by v3's built-in AI
 - [**Gotenberg**](https://github.com/gotenberg/gotenberg) — Document conversion API
 - [**Apache Tika**](https://github.com/apache/tika) — Content analysis and text extraction
 - [**PostgreSQL**](https://www.postgresql.org/) — The database engine

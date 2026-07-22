@@ -84,7 +84,9 @@ services:
           memory: 512M
 
   paperless:
-    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    # v3 requires an explicit tag because v3 introduces breaking DB migrations
+    # (see docs/migration-v3.md upstream). Pin to a version you have verified.
+    image: ghcr.io/paperless-ngx/paperless-ngx:${PAPERLESS_VERSION:-3.0.0}
     container_name: paperless-ngx
     healthcheck:
       test: ["CMD", "curl", "-fs", "-S", "--max-time", "2", "http://localhost:8000"]
@@ -112,6 +114,8 @@ services:
     environment:
       PAPERLESS_REDIS: redis://broker:6379
       PAPERLESS_DBHOST: db
+      # v3 no longer infers the engine from DBHOST presence; must be explicit.
+      PAPERLESS_DBENGINE: postgresql
       PAPERLESS_DBNAME: ${POSTGRES_DB}
       PAPERLESS_DBUSER: ${POSTGRES_USER}
       PAPERLESS_DBPASS: ${POSTGRES_PASSWORD}
@@ -129,12 +133,29 @@ services:
       # OCR
       PAPERLESS_OCR_LANGUAGE: ${PAPERLESS_OCR_LANGUAGE}
       PAPERLESS_OCR_LANGUAGES: ${PAPERLESS_OCR_LANGUAGES}
-      PAPERLESS_OCR_MODE: skip
-      PAPERLESS_OCR_SKIP_ARCHIVE_FILE: with_text
+      # v3 renamed OCR_MODE=skip to skip_noarchive and removed
+      # OCR_SKIP_ARCHIVE_FILE — see docs/migration-v3.md.
+      PAPERLESS_OCR_MODE: skip_noarchive
       PAPERLESS_OCR_CLEAN: none
       PAPERLESS_OCR_DPI: 300
       PAPERLESS_OCR_CACHING: "true"
       PAPERLESS_OCR_USER_ARGS: '{"invalidate_digital_signatures": true}'
+      # ── AI / LLM (v3 native, optional) ─────────────────────
+      # Configure via .env. Leave PAPERLESS_AI_ENABLED=false to disable.
+      # For Gemini, use OpenAI-compat endpoint:
+      #   PAPERLESS_AI_LLM_ENDPOINT=https://generativelanguage.googleapis.com/v1beta/openai/
+      #   PAPERLESS_AI_LLM_MODEL=gemini-2.5-flash
+      #   PAPERLESS_AI_LLM_EMBEDDING_MODEL=gemini-embedding-001
+      PAPERLESS_AI_ENABLED: ${PAPERLESS_AI_ENABLED:-false}
+      PAPERLESS_AI_LLM_BACKEND: ${PAPERLESS_AI_LLM_BACKEND:-}
+      PAPERLESS_AI_LLM_MODEL: ${PAPERLESS_AI_LLM_MODEL:-}
+      PAPERLESS_AI_LLM_API_KEY: ${PAPERLESS_AI_LLM_API_KEY:-}
+      PAPERLESS_AI_LLM_ENDPOINT: ${PAPERLESS_AI_LLM_ENDPOINT:-}
+      PAPERLESS_AI_LLM_OUTPUT_LANGUAGE: ${PAPERLESS_AI_LLM_OUTPUT_LANGUAGE:-en}
+      PAPERLESS_AI_LLM_REQUEST_TIMEOUT: ${PAPERLESS_AI_LLM_REQUEST_TIMEOUT:-60}
+      PAPERLESS_AI_LLM_EMBEDDING_BACKEND: ${PAPERLESS_AI_LLM_EMBEDDING_BACKEND:-}
+      PAPERLESS_AI_LLM_EMBEDDING_MODEL: ${PAPERLESS_AI_LLM_EMBEDDING_MODEL:-}
+      PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT: ${PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT:-}
       # Consumer
       PAPERLESS_CONSUMER_POLLING: 10
       PAPERLESS_CONSUMER_RECURSIVE: "true"
@@ -175,54 +196,6 @@ services:
       resources:
         limits:
           memory: 3G
-
-  # ── AI Classification (optional, --profile ai) ──────────
-  paperless-gpt:
-    image: icereed/paperless-gpt:latest
-    container_name: paperless-gpt
-    profiles:
-      - ai
-    environment:
-      PAPERLESS_BASE_URL: "http://paperless:8000"
-      PAPERLESS_API_TOKEN: "${PAPERLESS_API_TOKEN}"
-      PAPERLESS_PUBLIC_URL: "${PAPERLESS_URL}"
-      MANUAL_TAG: "paperless-gpt"
-      AUTO_TAG: "paperless-gpt-auto"
-      LLM_PROVIDER: "${LLM_PROVIDER}"
-      LLM_MODEL: "${LLM_MODEL}"
-      GOOGLEAI_API_KEY: "${GOOGLEAI_API_KEY}"
-      OPENAI_API_KEY: "${OPENAI_API_KEY}"
-      OLLAMA_HOST: "${OLLAMA_HOST}"
-      TOKEN_LIMIT: 0
-      OCR_PROVIDER: "${OCR_PROVIDER}"
-      OCR_PROCESS_MODE: "whole_pdf"
-      GOOGLE_PROJECT_ID: "${GOOGLE_PROJECT_ID}"
-      GOOGLE_LOCATION: "${GOOGLE_LOCATION}"
-      GOOGLE_PROCESSOR_ID: "${GOOGLE_PROCESSOR_ID}"
-      GOOGLE_APPLICATION_CREDENTIALS: "/app/credentials.json"
-      AUTO_OCR_TAG: "paperless-gpt-ocr-auto"
-      OCR_LIMIT_PAGES: "5"
-      LOG_LEVEL: "info"
-    volumes:
-      - ${INSTALL_DIR}/prompts:/app/prompts
-      - ${INSTALL_DIR}/google-ai.json:/app/credentials.json
-    ports:
-      - "127.0.0.1:8080:8080"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-    depends_on:
-      paperless:
-        condition: service_healthy
-    networks:
-      - paperless-net
-    deploy:
-      resources:
-        limits:
-          memory: 256M
 
   # ── Neo4j Graph Database (optional, --profile graph) ────
   neo4j:
