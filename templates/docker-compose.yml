@@ -1,7 +1,7 @@
 services:
 
   broker:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: paperless-redis
     read_only: true
     healthcheck:
@@ -54,7 +54,7 @@ services:
           memory: 512M
 
   gotenberg:
-    image: docker.io/gotenberg/gotenberg:8.7
+    image: docker.io/gotenberg/gotenberg:8.37
     container_name: paperless-gotenberg
     restart: unless-stopped
     security_opt:
@@ -86,7 +86,7 @@ services:
   paperless:
     # v3 requires an explicit tag because v3 introduces breaking DB migrations
     # (see docs/migration-v3.md upstream). Pin to a version you have verified.
-    image: ghcr.io/paperless-ngx/paperless-ngx:${PAPERLESS_VERSION:-3.0.0}
+    image: ghcr.io/paperless-ngx/paperless-ngx:${PAPERLESS_VERSION:-3.2.1}
     container_name: paperless-ngx
     healthcheck:
       test: ["CMD", "curl", "-fs", "-S", "--max-time", "2", "http://localhost:8000"]

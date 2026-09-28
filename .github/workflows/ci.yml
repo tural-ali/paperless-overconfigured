@@ -14,7 +14,7 @@ jobs:
     name: ShellCheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install ShellCheck
         run: sudo apt-get install -y shellcheck
@@ -32,7 +32,7 @@ jobs:
     name: Docker Compose Validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Create test .env from template
         run: |
@@ -112,7 +112,7 @@ jobs:
     name: Installer Syntax Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Bash syntax check — install.sh
         run: bash -n install.sh
@@ -138,7 +138,7 @@ jobs:
     name: Installer Smoke Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Run installer in non-interactive mode
         run: |
@@ -186,7 +186,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, ubuntu-22.04, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Syntax validation
         run: bash -n install.sh && bash -n uninstall.sh
